@@ -1,39 +1,47 @@
-//Kazdy element listy w JSONie musi zawierac zdjecie z oferty(link do zdjęcia), tytul, url do oferty na olx oraz opis
+// Run script command in terminal "npm start"
 
-const jsdom = require("jsdom");
+const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
-const axios = require("axios");
-const fs = require("fs").promises;
+const axios = require('axios');
+const fs = require('fs').promises;
 
 const mainUrl = `https://www.olx.pl/nieruchomosci/dzialki/sprzedaz/sejny/?search%5Bdist%5D=10`;
 
+//SELECTORS.element[0] is for olx offer | SELECTORS.element[1] is for otodom offer
+
 const SELECTORS = {
-  title: 'h1[data-cy="ad_title"]',
-  image: "div.swiper-zoom-container img",
+  title: ['h1[data-cy="ad_title"]', 'h1[data-cy="adPageAdTitle"]'],
+  url: 'a[data-cy="listing-ad-title"]',
+  image: ['div.swiper-zoom-container img', 'link[rel="preload"]'],
+  description: [
+    'div[data-cy="ad_description"] div',
+    'div[data-cy="adPageAdDescription"]',
+  ],
+  priceEl: [
+    'div[data-testid="ad-price-container"] h3',
+    'header strong[data-cy="adPageHeaderPrice"]',
+  ],
+  areaEl: ['ul.css-sfcl1s li:nth-child(4)', '.css-1ytkscc.ev4i3ak0'],
 };
 
 function getDataFromOlxAd(document, url) {
-  const title = document.querySelector(SELECTORS.title).textContent;
-
-  const image = document.querySelector(SELECTORS.image)
-    ? document.querySelector(SELECTORS.image).src
-    : "Brak zdjęcia";
+  const title = document.querySelector(SELECTORS.title[0]).textContent;
+  const imageEl = document.querySelector(SELECTORS.image[0]);
+  const image = imageEl ? imageEl.src : null;
 
   const description = document
-    .querySelector('div[data-cy="ad_description"] div')
-    .textContent.replace(/\r?\n|\r/g, " ");
+    .querySelector(SELECTORS.description[0])
+    .textContent.replace(/\r?\n|\r/g, ' ');
 
-  const priceEl = document.querySelector(
-    'div[data-testid="ad-price-container"] h3'
-  ).textContent;
-  const price = Number(priceEl.slice(0, -2).split(" ").join(""));
+  const priceEl = document.querySelector(SELECTORS.priceEl[0]).textContent;
+  const price = Number(priceEl.slice(0, -2).split(' ').join(''));
   const currency = priceEl.slice(-3).trim();
 
   const areaEl = document
-    .querySelector("ul.css-sfcl1s li:nth-child(4)")
+    .querySelector(SELECTORS.areaEl[0])
     .textContent.slice(13)
     .trim();
-  const area = Number(areaEl.slice(0, -2).split(" ").join(""));
+  const area = Number(areaEl.slice(0, -2).split(' ').join(''));
   const unitArea = areaEl.slice(-2).trim();
 
   return {
@@ -49,27 +57,24 @@ function getDataFromOlxAd(document, url) {
 }
 
 function getDataFromOtodomAd(document, url) {
-  const title = document.querySelector(
-    'h1[data-cy="adPageAdTitle"]'
-  ).textContent;
-  const imageEl = document.querySelector('link[rel="preload"]');
+  const title = document.querySelector(SELECTORS.title[1]).textContent;
+  const imageEl = document.querySelector(SELECTORS.image[1]);
 
-  const image = imageEl ? imageEl.getAttribute("href") : "Brak zdjęcia";
+  const image = imageEl ? imageEl.getAttribute('href') : null;
 
   const description = document
-    .querySelector('div[data-cy="adPageAdDescription"] ')
-    .textContent.replace(/\r?\n|\r/g, " ");
+    .querySelector(SELECTORS.description[1])
+    .textContent.replace(/\r?\n|\r/g, ' ');
 
-  const priceEl = document.querySelector(
-    'header strong[data-cy="adPageHeaderPrice"]'
-  ).textContent;
-  const price = Number(priceEl.slice(0, -2).split(" ").join(""));
+  const priceEl = document.querySelector(SELECTORS.priceEl[1]).textContent;
+  const price = Number(priceEl.slice(0, -2).split(' ').join(''));
   const currency = priceEl.slice(-3).trim();
 
-  const areaEl = document.querySelector(".css-1ytkscc.ev4i3ak0").textContent;
-  const area = Number(areaEl.slice(0, -2).split(" ").join(""));
+  const areaEl = document.querySelector(SELECTORS.areaEl[1]).textContent;
+  const area = Number(areaEl.slice(0, -2).split(' ').join(''));
   const unitArea = areaEl.slice(-2).trim();
-  const adAllDetail = {
+
+  return {
     title,
     url,
     image,
@@ -79,17 +84,16 @@ function getDataFromOtodomAd(document, url) {
     area,
     unitArea,
   };
-  return adAllDetail;
 }
 
 function getDataFromSingleAd(data, url) {
   const dom = new JSDOM(data);
   const { document } = dom.window;
 
-  if (url.indexOf("olx.pl") > -1) {
+  if (url.indexOf('olx.pl') > -1) {
     return getDataFromOlxAd(document, url);
   }
-  if (url.indexOf("otodom.pl") > -1) {
+  if (url.indexOf('otodom.pl') > -1) {
     return getDataFromOtodomAd(document, url);
   }
 }
@@ -97,19 +101,19 @@ function getDataFromSingleAd(data, url) {
 async function saveDataToJson(data) {
   const json = JSON.stringify(data);
 
-  await fs.writeFile("data.json", json).catch((err) => {
-    if (err) console.log("Nie udało się zapisać", err);
+  await fs.writeFile('data.json', json).catch((err) => {
+    if (err) console.log('Nie udało się zapisać', err);
   });
 }
 
 async function handelScrapeData(page) {
   const dom = new JSDOM(page);
   const { document } = dom.window;
-  const adUrls = Array.from(
-    document.querySelectorAll(`a[data-cy="listing-ad-title"]`)
-  ).map((adUrl) => adUrl.getAttribute("href"));
+  const adUrls = Array.from(document.querySelectorAll(SELECTORS.url)).map(
+    (adUrl) => adUrl.getAttribute('href')
+  );
 
-  let existingData = await fs.readFile("data.json", "utf-8").catch(() => null);
+  let existingData = await fs.readFile('data.json', 'utf-8').catch(() => null);
 
   if (!existingData) existingData = [];
   else existingData = JSON.parse(existingData);
