@@ -1,37 +1,42 @@
 //Kazdy element listy w JSONie musi zawierac zdjecie z oferty(link do zdjęcia), tytul, url do oferty na olx oraz opis
 
-const jsdom = require('jsdom');
+const jsdom = require("jsdom");
 const { JSDOM } = jsdom;
-const axios = require('axios');
-const fs = require('fs');
+const axios = require("axios");
+const fs = require("fs").promises;
 
 const mainUrl = `https://www.olx.pl/nieruchomosci/dzialki/sprzedaz/sejny/?search%5Bdist%5D=10`;
 
-function getDataFromOlxAd(document, url) {
-  const title = document.querySelector('h1[data-cy="ad_title"]').textContent;
+const SELECTORS = {
+  title: 'h1[data-cy="ad_title"]',
+  image: "div.swiper-zoom-container img",
+};
 
-  const image = document.querySelector('div.swiper-zoom-container img')
-    ? document.querySelector('div.swiper-zoom-container img').src
-    : 'Brak zdjęcia';
+function getDataFromOlxAd(document, url) {
+  const title = document.querySelector(SELECTORS.title).textContent;
+
+  const image = document.querySelector(SELECTORS.image)
+    ? document.querySelector(SELECTORS.image).src
+    : "Brak zdjęcia";
 
   const description = document
     .querySelector('div[data-cy="ad_description"] div')
-    .textContent.replace(/\r?\n|\r/g, ' ');
+    .textContent.replace(/\r?\n|\r/g, " ");
 
   const priceEl = document.querySelector(
     'div[data-testid="ad-price-container"] h3'
   ).textContent;
-  const price = Number(priceEl.slice(0, -2).split(' ').join(''));
+  const price = Number(priceEl.slice(0, -2).split(" ").join(""));
   const currency = priceEl.slice(-3).trim();
 
   const areaEl = document
-    .querySelector('ul.css-sfcl1s li:nth-child(4)')
+    .querySelector("ul.css-sfcl1s li:nth-child(4)")
     .textContent.slice(13)
     .trim();
-  const area = Number(areaEl.slice(0, -2).split(' ').join(''));
+  const area = Number(areaEl.slice(0, -2).split(" ").join(""));
   const unitArea = areaEl.slice(-2).trim();
 
-  const adAllDetail = {
+  return {
     title,
     url,
     image,
@@ -41,7 +46,6 @@ function getDataFromOlxAd(document, url) {
     area,
     unitArea,
   };
-  return adAllDetail;
 }
 
 function getDataFromOtodomAd(document, url) {
@@ -50,20 +54,20 @@ function getDataFromOtodomAd(document, url) {
   ).textContent;
   const imageEl = document.querySelector('link[rel="preload"]');
 
-  const image = imageEl ? imageEl.getAttribute('href') : 'Brak zdjęcia';
+  const image = imageEl ? imageEl.getAttribute("href") : "Brak zdjęcia";
 
   const description = document
     .querySelector('div[data-cy="adPageAdDescription"] ')
-    .textContent.replace(/\r?\n|\r/g, ' ');
+    .textContent.replace(/\r?\n|\r/g, " ");
 
   const priceEl = document.querySelector(
     'header strong[data-cy="adPageHeaderPrice"]'
   ).textContent;
-  const price = Number(priceEl.slice(0, -2).split(' ').join(''));
+  const price = Number(priceEl.slice(0, -2).split(" ").join(""));
   const currency = priceEl.slice(-3).trim();
 
-  const areaEl = document.querySelector('.css-1ytkscc.ev4i3ak0').textContent;
-  const area = Number(areaEl.slice(0, -2).split(' ').join(''));
+  const areaEl = document.querySelector(".css-1ytkscc.ev4i3ak0").textContent;
+  const area = Number(areaEl.slice(0, -2).split(" ").join(""));
   const unitArea = areaEl.slice(-2).trim();
   const adAllDetail = {
     title,
@@ -82,19 +86,19 @@ function getDataFromSingleAd(data, url) {
   const dom = new JSDOM(data);
   const { document } = dom.window;
 
-  if (url.indexOf('olx.pl') > -1) {
+  if (url.indexOf("olx.pl") > -1) {
     return getDataFromOlxAd(document, url);
   }
-  if (url.indexOf('otodom.pl') > -1) {
+  if (url.indexOf("otodom.pl") > -1) {
     return getDataFromOtodomAd(document, url);
   }
 }
 
-function saveDataToJson(data) {
+async function saveDataToJson(data) {
   const json = JSON.stringify(data);
 
-  fs.appendFile('data.json', json, (err) => {
-    if (err) console.log('Nie udało się zapisać', err);
+  await fs.writeFile("data.json", json).catch((err) => {
+    if (err) console.log("Nie udało się zapisać", err);
   });
 }
 
@@ -103,24 +107,33 @@ async function handelScrapeData(page) {
   const { document } = dom.window;
   const adUrls = Array.from(
     document.querySelectorAll(`a[data-cy="listing-ad-title"]`)
-  ).map((adUrl) => adUrl.getAttribute('href'));
+  ).map((adUrl) => adUrl.getAttribute("href"));
 
-  const arr = await Promise.all(
-    adUrls.map(async (adUrl) => {
-      const data = await getDataFromPage(adUrl);
-      const dataForSave = await getDataFromSingleAd(data, adUrl);
-      // const json = JSON.stringify(dataForSave);
-      // fs.readFile('data.json', 'utf-8', (err, data) => {
-      //   if (err) console.log(err);
-      //   if (data.indexOf(json) > -1) {
-      //     console.log('Coś takiego już istnieje');
-      //   } else console.log(data, json);
-      // });
-      return dataForSave;
-    })
-  );
+  let existingData = await fs.readFile("data.json", "utf-8").catch(() => null);
 
-  saveDataToJson(arr);
+  if (!existingData) existingData = [];
+  else existingData = JSON.parse(existingData);
+
+  const arr = (
+    await Promise.all(
+      adUrls.map(async (adUrl) => {
+        const data = await getDataFromPage(adUrl);
+        const dataForSave = await getDataFromSingleAd(data, adUrl);
+
+        const existingOffer = !!existingData.find(
+          (d) => d.url === dataForSave.url
+        );
+
+        if (existingOffer) {
+          return null;
+        } else {
+          return dataForSave;
+        }
+      })
+    )
+  ).filter(Boolean);
+
+  if (arr.length) await saveDataToJson([...existingData, ...arr]);
 }
 
 async function getDataFromPage(url) {
