@@ -90,19 +90,37 @@ function getDataFromSingleAd(data, url) {
   }
 }
 
-function handelScrapeData(page) {
+function saveDataToJson(data) {
+  const json = JSON.stringify(data);
+
+  fs.appendFile('data.json', json, (err) => {
+    if (err) console.log('Nie udało się zapisać', err);
+  });
+}
+
+async function handelScrapeData(page) {
   const dom = new JSDOM(page);
   const { document } = dom.window;
   const adUrls = Array.from(
     document.querySelectorAll(`a[data-cy="listing-ad-title"]`)
   ).map((adUrl) => adUrl.getAttribute('href'));
 
-  adUrls.forEach((adUrl) => {
-    getDataFromPage(adUrl).then((res) => {
-      const dataForSave = getDataFromSingleAd(res, adUrl);
-      console.log(dataForSave);
-    });
-  });
+  const arr = await Promise.all(
+    adUrls.map(async (adUrl) => {
+      const data = await getDataFromPage(adUrl);
+      const dataForSave = await getDataFromSingleAd(data, adUrl);
+      // const json = JSON.stringify(dataForSave);
+      // fs.readFile('data.json', 'utf-8', (err, data) => {
+      //   if (err) console.log(err);
+      //   if (data.indexOf(json) > -1) {
+      //     console.log('Coś takiego już istnieje');
+      //   } else console.log(data, json);
+      // });
+      return dataForSave;
+    })
+  );
+
+  saveDataToJson(arr);
 }
 
 async function getDataFromPage(url) {
@@ -114,4 +132,14 @@ async function getDataFromPage(url) {
     console.error(error);
   }
 }
-getDataFromPage(mainUrl).then((res) => handelScrapeData(res));
+
+async function startScrape() {
+  try {
+    const data = await getDataFromPage(mainUrl);
+    await handelScrapeData(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+startScrape();
