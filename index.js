@@ -4,8 +4,23 @@ const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 const axios = require('axios');
 const fs = require('fs').promises;
+const Offer = require('./models/offer');
 
-const mainUrl = `https://www.olx.pl/nieruchomosci/dzialki/sprzedaz/sejny/?search%5Bdist%5D=10`;
+const mongoose = require('mongoose');
+const config = require('./config');
+
+// mongoose.connect(config.db, {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true,
+// });
+
+// const db = mongoose.connection;
+// db.on('error', console.error.bind(console, 'connection error:'));
+// db.once('open', function () {
+//   console.log(`we're connected!`);
+// });
+
+// const mainUrl = `https://www.olx.pl/nieruchomosci/dzialki/sprzedaz/sejny/?search%5Bdist%5D=10`;
 
 //SELECTORS.element[0] is for olx offer | SELECTORS.element[1] is for otodom offer
 
@@ -99,11 +114,17 @@ function getDataFromSingleAd(data, url) {
 }
 
 async function saveDataToJson(data) {
-  const json = JSON.stringify(data);
+  const offerData = new Offer(data);
 
-  await fs.writeFile('data.json', json).catch((err) => {
-    if (err) console.log('Nie udało się zapisać', err);
+  offerData.save((err) => {
+    if (err) {
+      console.log('We have problem with:', err);
+    }
   });
+
+  // await fs.writeFile('data.json', json).catch((err) => {
+  //   if (err) console.log('Nie udało się zapisać', err);
+  // });
 }
 
 async function handelScrapeData(page) {
@@ -113,31 +134,46 @@ async function handelScrapeData(page) {
     (adUrl) => adUrl.getAttribute('href')
   );
 
-  let existingData = await fs.readFile('data.json', 'utf-8').catch(() => null);
+  adUrls.forEach(async (adUrl) => {
+    const data = await getDataFromPage(adUrl);
+    const dataForSave = await getDataFromSingleAd(data, adUrl);
+    const isExistingInDB = Offer.findOne({ url: adUrl });
+    isExistingInDB.exec((err, data) => {
+      // console.log(!!data);
+      const isOfferExist = !!data;
+      if (!isOfferExist) {
+        saveDataToJson(dataForSave);
+        console.log('ogłoszenie zostało dodane');
+      } else {
+        console.log('Ogłosznie już istnieje w bazie danych');
+      }
+    });
+    // saveDataToJson(dataForSave);
+  });
 
-  if (!existingData) existingData = [];
-  else existingData = JSON.parse(existingData);
+  // let existingData = await fs.readFile('data.json', 'utf-8').catch(() => null);
 
-  const arr = (
-    await Promise.all(
-      adUrls.map(async (adUrl) => {
-        const data = await getDataFromPage(adUrl);
-        const dataForSave = await getDataFromSingleAd(data, adUrl);
+  // if (!existingData) existingData = [];
+  // else existingData = JSON.parse(existingData);
 
-        const existingOffer = !!existingData.find(
-          (d) => d.url === dataForSave.url
-        );
+  // const arr = await Promise.all(
+  //   adUrls.map(async (adUrl) => {
+  //     const data = await getDataFromPage(adUrl);
+  //     const dataForSave = await getDataFromSingleAd(data, adUrl);
 
-        if (existingOffer) {
-          return null;
-        } else {
-          return dataForSave;
-        }
-      })
-    )
-  ).filter(Boolean);
+  //     // const existingOffer = !!existingData.find(
+  //     //   (d) => d.url === dataForSave.url
+  //     // );
 
-  if (arr.length) await saveDataToJson([...existingData, ...arr]);
+  //     // if (existingOffer) {
+  //     //   return null;
+  //     // } else {
+  //     //   return dataForSave;
+  //     // }
+  //   })
+  // );
+  // // .filter(Boolean);
+  // // if (arr.length) await saveDataToJson([...existingData, ...arr]);
 }
 
 async function getDataFromPage(url) {
@@ -150,7 +186,7 @@ async function getDataFromPage(url) {
   }
 }
 
-async function startScrape() {
+async function startScrape(mainUrl) {
   try {
     const data = await getDataFromPage(mainUrl);
     await handelScrapeData(data);
@@ -158,5 +194,5 @@ async function startScrape() {
     console.error(error);
   }
 }
-
-startScrape();
+// startScrape(mainUrl);
+module.exports = startScrape;
