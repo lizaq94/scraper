@@ -1,9 +1,8 @@
 const express = require('express');
-const { pullAll, showAll, showOne } = require('./controlers/offerControlers');
 const mongoose = require('mongoose');
 const config = require('./config');
 const bodyParser = require('body-parser');
-const startScrape = require('./index');
+const offerRouter = require('./routes/offerRouter');
 
 mongoose.connect(config.db, {
   useNewUrlParser: true,
@@ -19,18 +18,10 @@ db.once('open', function () {
 const app = express();
 const port = 3000;
 
-app.use(express.json()); // for parsing application/json
-app.use(express.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.get('/', (req, res) => {
-  res.send('Hello');
-});
-
-app.post('/pull', pullAll);
-
-app.get('/offers', showAll);
-
-app.get('/offers/:id', showOne);
+app.use('/', offerRouter);
 
 app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
