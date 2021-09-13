@@ -112,8 +112,9 @@ async function handelScrapeData(page) {
   const adUrls = Array.from(document.querySelectorAll(SELECTORS.url)).map(
     (adUrl) => adUrl.getAttribute('href')
   );
+  const adUrlsUniq = [...new Set(adUrls)];
 
-  adUrls.forEach(async (adUrl) => {
+  adUrlsUniq.forEach(async (adUrl) => {
     try {
       const data = await getDataFromPage(adUrl);
       const dataForSave = getDataFromSingleAd(data, adUrl);

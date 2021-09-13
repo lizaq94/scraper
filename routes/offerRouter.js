@@ -12,22 +12,23 @@ router.post('/pull', (req, res) => {
 router.get('/offers', async (req, res) => {
   try {
     const sortParam = req.query;
-    if (sortParam.hasOwnProperty('desc')) {
-      const offers = await Offer.find().sort({ price: -1 });
-      res.json(offers);
-    } else if (sortParam.hasOwnProperty('asc')) {
-      const offers = await Offer.find().sort({ price: 1 });
-      res.json(offers);
-    } else {
-      Offer.countDocuments(async (err, count) => {
-        if (!err && count === 0) {
-          res.status(404).send('Baza jest pusta');
+
+    Offer.countDocuments(async (err, count) => {
+      if (!err && count === 0) {
+        res.status(404).send('Baza jest pusta');
+      } else {
+        if (sortParam.hasOwnProperty('desc')) {
+          const offers = await Offer.find().sort({ price: -1 });
+          res.json(offers);
+        } else if (sortParam.hasOwnProperty('asc')) {
+          const offers = await Offer.find().sort({ price: 1 });
+          res.json(offers);
         } else {
           const offers = await Offer.find();
           res.json(offers);
         }
-      });
-    }
+      }
+    });
   } catch (err) {
     console.log(err);
   }
@@ -35,12 +36,20 @@ router.get('/offers', async (req, res) => {
 
 router.get('/offers/:id', (req, res) => {
   const params = req.params;
-  const showOne = Offer.find({ _id: params.id });
-  showOne.exec((err, data) => {
-    if (err) {
-      res.status(404).send('404 mój drogi kolego');
+
+  Offer.countDocuments(async (err, count) => {
+    if (!err && count === 0) {
+      res.status(404).send('Baza jest pusta');
+    } else {
+      const showOne = Offer.findOne({ _id: params.id });
+      showOne.exec((err, data) => {
+        if (data) {
+          res.json(data);
+        } else {
+          res.status(404).send('404 mój drogi kolego');
+        }
+      });
     }
-    res.json(data);
   });
 });
 
