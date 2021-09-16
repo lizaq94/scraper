@@ -92,15 +92,10 @@ function getDataFromSingleAd(data, url) {
   }
 }
 
-async function saveDataToJson(data) {
+async function saveDataToDB(data) {
   try {
     const offerData = new Offer(data);
-
-    offerData.save((err) => {
-      if (err) {
-        console.log('Erorr;', err);
-      }
-    });
+    await offerData.save();
   } catch (err) {
     console.error(err);
   }
@@ -118,12 +113,11 @@ async function handelScrapeData(page) {
     try {
       const data = await getDataFromPage(adUrl);
       const dataForSave = getDataFromSingleAd(data, adUrl);
-      Offer.findOne({ url: adUrl }).exec((err, data) => {
-        const isOfferExist = !!data;
-        if (!isOfferExist) {
-          saveDataToJson(dataForSave);
-        }
-      });
+      const isOfferExist = await Offer.findOne({ url: adUrl });
+
+      if (!isOfferExist) {
+        saveDataToDB(dataForSave);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -140,7 +134,7 @@ async function getDataFromPage(url) {
   }
 }
 
-async function startScrape(mainUrl) {
+async function getOffersFromUrl(mainUrl) {
   try {
     const data = await getDataFromPage(mainUrl);
     await handelScrapeData(data);
@@ -149,4 +143,4 @@ async function startScrape(mainUrl) {
   }
 }
 
-module.exports = startScrape;
+module.exports = getOffersFromUrl;
